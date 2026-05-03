@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>War Robots - Браузерный клон v23 (фикс багов + баланс)</title>
+    <title>War Robots - Браузерный клон v24 (турели, дроны, фиксы)</title>
     <style>
         :root {
             --bg: #0a0a14; --panel: #111122; --border: #334;
@@ -198,7 +198,7 @@
     </div>
 
     <script>
-        // ==================== DATA (v23 с балансом) ====================
+        // ==================== DATA ====================
         const ROBOTS = {
             'Destrier': { hp: 700, speed: 5.0, slots: ['light', 'light'], ability: null, color: '#888888', parts: 0 },
             'Phantom': { hp: 1000, speed: 6.5, slots: ['medium', 'light'], ability: 'Blink', color: '#3cc0ff', parts: 8 },
@@ -303,10 +303,10 @@
             a.silver = silver; a.gold = gold; a.parts = JSON.parse(JSON.stringify(parts));
             a.hangarSlots = JSON.parse(JSON.stringify(hangarSlots)); a.lastGiftTime = lastGiftTime;
             a.password = a.password || '';
-            localStorage.setItem('warRobots_v23', JSON.stringify(accounts));
+            localStorage.setItem('warRobots_v24', JSON.stringify(accounts));
         }
         function loadAccount(name) {
-            const s = localStorage.getItem('warRobots_v23');
+            const s = localStorage.getItem('warRobots_v24');
             if (s) { try { accounts = JSON.parse(s); } catch (e) { accounts = {}; } }
             const d = accounts[name]; if (!d) return false;
             currentAccount = name; silver = d.silver||500; gold = d.gold||50; parts = d.parts||{};
@@ -603,7 +603,8 @@
         function spawnPlayerRobot() {
             const s = hangarSlots[currentRobotIndex];
             if (!s || !s.robotName || !ROBOTS[s.robotName]) return;
-            const r = ROBOTS[s.robotName]; let spd = getRobotStat(s,'speed'); if (s.drone==='Octanian') spd*=1.15;
+            const r = ROBOTS[s.robotName]; let spd = getRobotStat(s,'speed');
+            if (s.drone==='Octanian') { spd*=1.15; showToast('⚡ Octanian: скорость +15%'); }
             player = {
                 x:500, y:500, radius:18, hp: s.currentHp||Math.round(getRobotStat(s,'hp')), maxHp: Math.round(getRobotStat(s,'hp')),
                 speed: Math.min(7.0, spd), robotName: s.robotName,
@@ -657,34 +658,84 @@
 
         function spawnWave() { spawnRobotEnemies(3 + wave * 2, wave); }
 
-        // ==================== ABILITY (исправлено) ====================
+        // ==================== ABILITY ====================
         function useEntityAbility(entity, targetX, targetY) {
             if (!entity || entity.abilityCooldown>0 || !entity.ability || entity.stunned>0) return;
             let cd=180;
             const a=entity.ability;
             if (a==='Blink') { cd=180; const ang=Math.atan2(targetY-entity.y, targetX-entity.x); entity.x+=Math.cos(ang)*180; entity.y+=Math.sin(ang)*180; }
-            else if (a==='Mining') { cd=300; entity.invisTimer=180; entity.invulnerable=180;
-                const mineTeam = entity.team;
-                enemies.push({ x:entity.x, y:entity.y, type:'mine', radius:15, hp:1, maxHp:1, speed:0, meleeDmg:100, attackCooldown:0, shootRange:0, shootDmg:0, shootCd:0, shootTimer:0, color:'#555555', stunned:0, slow:null, poison:null, fire:null, team:mineTeam, isMine:true, weaponData:[], weaponState:[], weapons:[], ability:null, abilityCooldown:0, invulnerable:0, invisTimer:0, damageBoost:1, electricAura:0, healAura:0, selfHeal:0, dashCharges:0, dashRechargeTimer:0, abilityTimer:0, isBoss:false, bossType:null, stuckX:0, stuckY:0, stuckTimer:0, robotName:'Mine', mkLevel:'MK1', level:1, drone:null, slots:[], color:'#555555', attackCooldown:0, shootTimer:0, firestorm:null }); }
+            else if (a==='Mining') { 
+                cd=300; 
+                entity.invisTimer=180; 
+                entity.invulnerable=180;
+                const mineObj = { 
+                    x:entity.x, y:entity.y, type:'mine', radius:15, hp:1, maxHp:1, 
+                    speed:0, meleeDmg:100, attackCooldown:0, shootRange:0, shootDmg:0, 
+                    shootCd:0, shootTimer:0, color:'#555555', stunned:0, slow:null, 
+                    poison:null, fire:null, team:entity.team, isMine:true, 
+                    weaponData:[], weaponState:[], weapons:[], ability:null, 
+                    abilityCooldown:0, invulnerable:0, invisTimer:0, damageBoost:1, 
+                    electricAura:0, healAura:0, selfHeal:0, dashCharges:0, 
+                    dashRechargeTimer:0, abilityTimer:0, isBoss:false, bossType:null, 
+                    stuckX:0, stuckY:0, stuckTimer:0, robotName:'Mine', mkLevel:'MK1', 
+                    level:1, drone:null, slots:[], attackCooldown:0, shootTimer:0, 
+                    firestorm:null, mineTimer:300
+                };
+                if (entity.team === 'enemy') { enemies.push(mineObj); }
+                else { allies.push(mineObj); }
+            }
             else if (a==='Comet Splash') { cd=360; entity.y-=80; setTimeout(()=>{ if (combatActive) { const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); targets.forEach(e=>{ if(Math.hypot(e.x-entity.x, e.y-entity.y)<150) e.hp-=120; }); } }, 300); }
             else if (a==='Transform') { cd=600; entity.damageBoost=2; entity.abilityTimer=240; }
             else if (a==='Dash') { if (entity.dashCharges>0) { cd=120; entity.dashCharges--; const ang=Math.atan2(targetY-entity.y, targetX-entity.x); entity.x+=Math.cos(ang)*100; entity.y+=Math.sin(ang)*100; entity.invulnerable=10; } else return; }
-            else if (a==='Backstab Teleport') { cd=480; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); let nearest=null,nd=Infinity; targets.forEach(e=>{ if(e.hp>0){ const d=Math.hypot(e.x-entity.x,e.y-entity.y); if(d<nd){nd=d;nearest=e;} } }); if(nearest&&nd<450){ const ang=Math.atan2(nearest.y-entity.y, nearest.x-entity.x); entity.x=nearest.x-Math.cos(ang)*50; entity.y=nearest.y-Math.sin(ang)*50; entity.damageBoost=1.5; setTimeout(()=>{ entity.damageBoost=1; },3000); if(entity.drone==='Beak'){entity.invisTimer=120;entity.invulnerable=120;} } }
+            else if (a==='Backstab Teleport') { cd=480; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); let nearest=null,nd=Infinity; targets.forEach(e=>{ if(e.hp>0){ const d=Math.hypot(e.x-entity.x,e.y-entity.y); if(d<nd){nd=d;nearest=e;} } }); if(nearest&&nd<450){ const ang=Math.atan2(nearest.y-entity.y, nearest.x-entity.x); entity.x=nearest.x-Math.cos(ang)*50; entity.y=nearest.y-Math.sin(ang)*50; entity.damageBoost=1.5; setTimeout(()=>{ entity.damageBoost=1; },3000); if(entity.drone==='Beak'){ entity.invisTimer=120; entity.invulnerable=120; showToast('🦅 Beak: невидимость 2 сек!'); } } }
             else if (a==='Rush Shield') { cd=540; entity.speed*=2; entity.selfHeal=15; entity.abilityTimer=300; }
             else if (a==='EMP Blast') { 
                 cd=600; 
                 const targets = entity.team==='ally'||entity.team==='player' ? enemies : allies.concat([player]); 
                 targets.forEach(e=>{ 
                     if(Math.hypot(e.x-entity.x, e.y-entity.y)<300) {
-                        if (entity.team === 'enemy' || entity.team === 'ally') {
-                            e.stunned = Math.min(e.stunned + 48, 48);
-                        } else {
-                            e.stunned = Math.min(e.stunned + 150, 150);
-                        }
+                        if (entity.team === 'enemy' || entity.team === 'ally') { e.stunned = Math.min(e.stunned + 48, 48); }
+                        else { e.stunned = Math.min(e.stunned + 150, 150); }
                     }
                 }); 
-                if(entity.drone==='Discus') entity.damageBoost=1.5; 
-                setTimeout(()=>{ if(entity) entity.damageBoost=1; },3000); 
+                if (entity.drone === 'Discus') {
+                    entity.damageBoost = 1.5;
+                    showToast('💥 Discus: +50% урона на 3 сек!');
+                    setTimeout(() => { if(entity) entity.damageBoost = 1; }, 3000);
+                }
+                if (entity.robotName === 'Typhoon Ultimate' && (entity.team === 'player' || entity.team === 'ally')) {
+                    const turretLevel = entity.level || 1;
+                    const turretMk = entity.mkLevel || 'MK1';
+                    const turretHp = entity.maxHp * 1.1;
+                    const stingDmg = getWeaponDamage({name: 'Ultimate Sting', mkLevel: turretMk, level: turretLevel});
+                    const turret = {
+                        x: entity.x + (Math.random()-0.5)*100, y: entity.y + (Math.random()-0.5)*100,
+                        radius: 16, hp: turretHp, maxHp: turretHp,
+                        speed: 0, robotName: 'Turret', team: (entity.team === 'player' || entity.team === 'ally') ? 'ally' : 'enemy',
+                        weapons: ['Ultimate Sting', 'Ultimate Sting'],
+                        weaponData: [
+                            { ...WEAPONS['Ultimate Sting'], dmg: stingDmg },
+                            { ...WEAPONS['Ultimate Sting'], dmg: stingDmg }
+                        ],
+                        weaponState: [
+                            { ammo: WEAPONS['Ultimate Sting'].mag, reloading: 0, cooldown: 0 },
+                            { ammo: WEAPONS['Ultimate Sting'].mag, reloading: 0, cooldown: 0 }
+                        ],
+                        drone: null, ability: null, abilityCooldown: 0,
+                        invulnerable: 0, invisTimer: 0, damageBoost: 1,
+                        stunned: 0, electricAura: 0, healAura: 0, selfHeal: 0,
+                        dashCharges: 0, dashRechargeTimer: 0, abilityTimer: 0,
+                        color: '#aa66ff', slots: ['medium', 'medium'],
+                        attackCooldown: 0, shootTimer: 0,
+                        firestorm: null, isBoss: false, bossType: null,
+                        stuckX: 0, stuckY: 0, stuckTimer: 0,
+                        slow: null, poison: null, fire: null,
+                        isMine: false, mkLevel: turretMk, level: turretLevel,
+                    };
+                    if (turret.team === 'ally') allies.push(turret);
+                    else enemies.push(turret);
+                    showToast('🛡️ Турель 2x Ultimate Sting активирована!');
+                }
             }
             else if (a==='Electric Storm') { cd=720; entity.electricAura=240; }
             else if (a==='Firestorm') { cd=720; entity.firestorm={x:entity.x, y:entity.y, timer:300, radius:150, dps:30}; }
@@ -744,8 +795,10 @@
         function entityAI(entity) {
             if (!entity || entity.stunned>0) return;
             if (entity.isMine) {
-                const t = entity.team==='enemy' ? allies.concat([player]) : enemies;
-                t.forEach(e=>{ if(e && e.hp>0 && Math.hypot(e.x-entity.x, e.y-entity.y)<100){ e.hp-=entity.meleeDmg; entity.hp=0; } });
+                const targets = entity.team==='enemy' ? allies.concat([player]) : enemies;
+                targets.forEach(e=>{ if(e && e.hp>0 && Math.hypot(e.x-entity.x, e.y-entity.y)<100){ e.hp-=entity.meleeDmg; entity.hp=0; } });
+                if (entity.mineTimer) entity.mineTimer--;
+                if (entity.mineTimer <= 0) { entity.hp = 0; }
                 return;
             }
             const targets = entity.team==='ally'||entity.team==='player' ? enemies : allies.concat([player]).filter(t => t && t.hp > 0);
@@ -757,38 +810,41 @@
             if (entity.attackCooldown>0) entity.attackCooldown--;
             entity.shootTimer -= 1/60;
 
-            if (entity.isBoss && entity.bossType === 'Titan') {
-                if (dist>50) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
-            } else if (entity.isBoss && entity.bossType === 'Overlord') {
-                if (dist<200) { entity.x -= (dx/dist)*entity.speed; entity.y -= (dy/dist)*entity.speed; }
-                else if (dist>400) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
-            } else if (entity.isBoss && entity.bossType === 'Reaper') {
-                if (dist>100) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
+            if (entity.robotName === 'Turret') {
+                if (dist<500 && dist>50 && entity.shootTimer<=0) {
+                    entity.shootTimer = 0.5;
+                    entityShoot(entity, nearest.x, nearest.y);
+                }
             } else {
-                if (dist<160) { entity.x -= (dx/dist)*entity.speed; entity.y -= (dy/dist)*entity.speed; }
-                else if (dist>350) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
-            }
-
-            const targetIsPlayer = (nearest === player);
-            const canShoot = !targetIsPlayer || (player && player.invisTimer <= 0);
-            const shootRange = entity.weaponData[0]?.range || 350;
-            if (dist<shootRange && dist>50 && entity.shootTimer<=0 && canShoot) {
-                entity.shootTimer = entity.weaponData[0]?.cooldown||0.5;
-                entityShoot(entity, nearest.x, nearest.y);
-            }
-
-            if (dist<entity.radius+nearest.radius+10 && entity.attackCooldown<=0 && canShoot) {
-                entity.attackCooldown=40; nearest.hp-=10;
-            }
-
-            if (entity.abilityCooldown<=0 && entity.ability && Math.random()<0.002) {
-                if (entity.ability === 'EMP Blast') {
-                    const nearbyTargets = targets.filter(t => t && t.hp > 0 && Math.hypot(t.x-entity.x, t.y-entity.y) < 300).length;
-                    if (nearbyTargets >= 2) {
-                        useEntityAbility(entity, nearest.x, nearest.y);
-                    }
+                if (entity.isBoss && entity.bossType === 'Titan') {
+                    if (dist>50) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
+                } else if (entity.isBoss && entity.bossType === 'Overlord') {
+                    if (dist<200) { entity.x -= (dx/dist)*entity.speed; entity.y -= (dy/dist)*entity.speed; }
+                    else if (dist>400) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
+                } else if (entity.isBoss && entity.bossType === 'Reaper') {
+                    if (dist>100) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
                 } else {
-                    useEntityAbility(entity, nearest.x, nearest.y);
+                    if (dist<160) { entity.x -= (dx/dist)*entity.speed; entity.y -= (dy/dist)*entity.speed; }
+                    else if (dist>350) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
+                }
+
+                const targetIsPlayer = (nearest === player);
+                const canShoot = !targetIsPlayer || (player && player.invisTimer <= 0);
+                const shootRange = entity.weaponData[0]?.range || 350;
+                if (dist<shootRange && dist>50 && entity.shootTimer<=0 && canShoot) {
+                    entity.shootTimer = entity.weaponData[0]?.cooldown||0.5;
+                    entityShoot(entity, nearest.x, nearest.y);
+                }
+
+                if (dist<entity.radius+nearest.radius+10 && entity.attackCooldown<=0 && canShoot) {
+                    entity.attackCooldown=40; nearest.hp-=10;
+                }
+
+                if (entity.abilityCooldown<=0 && entity.ability && Math.random()<0.002) {
+                    if (entity.ability === 'EMP Blast') {
+                        const nearbyTargets = targets.filter(t => t && t.hp > 0 && Math.hypot(t.x-entity.x, t.y-entity.y) < 300).length;
+                        if (nearbyTargets >= 2) { useEntityAbility(entity, nearest.x, nearest.y); }
+                    } else { useEntityAbility(entity, nearest.x, nearest.y); }
                 }
             }
 
@@ -827,7 +883,7 @@
             }
             updateEntity(player);
 
-            if (!barrelUsed && player.drone==='Barrel' && player.hp/player.maxHp<0.3) { barrelUsed=true; enemies.forEach(e=>{ if(Math.hypot(e.x-player.x, e.y-player.y)<180) e.hp-=100; }); }
+            if (!barrelUsed && player.drone==='Barrel' && player.hp/player.maxHp<0.3) { barrelUsed=true; enemies.forEach(e=>{ if(Math.hypot(e.x-player.x, e.y-player.y)<180) e.hp-=100; }); showToast('💣 Barrel: взрывной урон врагам!'); }
 
             allies.forEach(a => { updateEntity(a); entityAI(a); });
             enemies.forEach(e => { updateEntity(e); entityAI(e); });
@@ -871,7 +927,7 @@
                         if (b.effect==='fire_strong') e.fire={dps:15,timer:180};
                         if (b.effect==='blast'||b.effect==='splash') allTargets.forEach(e2=>{ if(e2!==e&&Math.hypot(b.x-e2.x,b.y-e2.y)<55) e2.hp-=b.damage*0.5; });
                         if (b.effect==='lightning') { let chain=null,cd=Infinity; allTargets.forEach(e2=>{ if(e2!==e&&e2.hp>0){ const d=Math.hypot(e.x-e2.x,e.y-e2.y); if(d<130&&d<cd){cd=d;chain=e2;} } }); if(chain) chain.hp-=b.damage*0.4; }
-                        if (!b.isEnemy && player && player.drone==='Paralysis'&&Math.random()<0.2) e.stunned=60;
+                        if (!b.isEnemy && player && player.drone==='Paralysis' && Math.random()<0.25) { e.stunned=60; showToast('⚡ Paralysis: цель оглушена!'); }
                         particles.push({x:b.x,y:b.y,type:'spark',life:6,color:b.color});
                     }
                 });
@@ -938,10 +994,30 @@
             capturePoints.forEach(cp=>{ctx.fillStyle=cp.owner==='player'?'rgba(68,136,255,0.5)':'rgba(255,68,68,0.5)';ctx.beginPath();ctx.arc(cp.x,cp.y,28,0,Math.PI*2);ctx.fill();});
 
             allies.forEach(a=>{
-                ctx.fillStyle='#4488ff';ctx.beginPath();ctx.arc(a.x,a.y,a.radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.stroke();
-                const hpW=a.radius*2; ctx.fillStyle='#000';ctx.fillRect(a.x-hpW/2-1, a.y-a.radius-13, hpW+2, 9);
-                ctx.fillStyle='#44cc66';ctx.fillRect(a.x-hpW/2, a.y-a.radius-12, hpW*Math.max(0,a.hp/a.maxHp), 7);
-                ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(a.robotName,a.x,a.y-a.radius-16);
+                if (a.robotName === 'Turret') {
+                    ctx.fillStyle = '#aa66ff';
+                    ctx.fillRect(a.x-14, a.y-14, 28, 28);
+                    ctx.strokeStyle = '#cc88ff';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(a.x-14, a.y-14, 28, 28);
+                    ctx.fillStyle = '#88ff00';
+                    ctx.beginPath(); ctx.arc(a.x-6, a.y-6, 3, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(a.x+6, a.y+6, 3, 0, Math.PI*2); ctx.fill();
+                    const hpW = 30;
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(a.x-hpW/2-1, a.y-20, hpW+2, 7);
+                    ctx.fillStyle = '#44cc66';
+                    ctx.fillRect(a.x-hpW/2, a.y-19, hpW*Math.max(0, a.hp/a.maxHp), 5);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 7px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('TURRET', a.x, a.y-24);
+                } else {
+                    ctx.fillStyle='#4488ff';ctx.beginPath();ctx.arc(a.x,a.y,a.radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.stroke();
+                    const hpW=a.radius*2; ctx.fillStyle='#000';ctx.fillRect(a.x-hpW/2-1, a.y-a.radius-13, hpW+2, 9);
+                    ctx.fillStyle='#44cc66';ctx.fillRect(a.x-hpW/2, a.y-a.radius-12, hpW*Math.max(0,a.hp/a.maxHp), 7);
+                    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(a.robotName,a.x,a.y-a.radius-16);
+                }
             });
 
             enemies.forEach(e=>{
@@ -974,13 +1050,13 @@
         function setupEventListeners() {
             document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));document.getElementById('tab-'+b.dataset.tab).classList.add('active');}));
             document.getElementById('btn-login').addEventListener('click',()=>{const n=document.getElementById('login-name').value.trim(),p=document.getElementById('login-pass').value,m=document.getElementById('login-msg');if(!n||!p)m.textContent='Заполните поля';else if(!accounts[n])m.textContent='Не найден';else if(accounts[n].password!==p)m.textContent='Неверный пароль';else if(loadAccount(n))showHangar();});
-            document.getElementById('btn-register').addEventListener('click',()=>{const n=document.getElementById('reg-name').value.trim(),p=document.getElementById('reg-pass').value,p2=document.getElementById('reg-pass2').value,m=document.getElementById('login-msg');if(n.length<3)m.textContent='Имя: 3+ симв.';else if(p.length<4)m.textContent='Пароль: 4+ симв.';else if(p!==p2)m.textContent='Пароли не совпадают';else if(accounts[n])m.textContent='Занято';else{accounts[n]={password:p};localStorage.setItem('warRobots_v23',JSON.stringify(accounts));initNewAccount(n);accounts[n].password=p;saveAccount();showHangar();}});
-            document.getElementById('btn-guest').addEventListener('click',()=>{const gn='Guest_'+Math.floor(Math.random()*9000+1000);accounts[gn]={password:''};localStorage.setItem('warRobots_v23',JSON.stringify(accounts));initNewAccount(gn);showHangar();});
+            document.getElementById('btn-register').addEventListener('click',()=>{const n=document.getElementById('reg-name').value.trim(),p=document.getElementById('reg-pass').value,p2=document.getElementById('reg-pass2').value,m=document.getElementById('login-msg');if(n.length<3)m.textContent='Имя: 3+ симв.';else if(p.length<4)m.textContent='Пароль: 4+ симв.';else if(p!==p2)m.textContent='Пароли не совпадают';else if(accounts[n])m.textContent='Занято';else{accounts[n]={password:p};localStorage.setItem('warRobots_v24',JSON.stringify(accounts));initNewAccount(n);accounts[n].password=p;saveAccount();showHangar();}});
+            document.getElementById('btn-guest').addEventListener('click',()=>{const gn='Guest_'+Math.floor(Math.random()*9000+1000);accounts[gn]={password:''};localStorage.setItem('warRobots_v24',JSON.stringify(accounts));initNewAccount(gn);showHangar();});
             document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)hideModal();});
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const s = localStorage.getItem('warRobots_v23'); if (s) try { accounts = JSON.parse(s); } catch (e) { accounts = {}; }
+            const s = localStorage.getItem('warRobots_v24'); if (s) try { accounts = JSON.parse(s); } catch (e) { accounts = {}; }
             setupEventListeners();
             window.addEventListener('keydown', e => {
                 if (e.target.tagName === 'INPUT') return;
