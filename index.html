@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>War Robots - Браузерный клон v24 (турели, дроны, фиксы)</title>
+    <title>War Robots - Браузерный клон v25 (Модули + Пилоты)</title>
     <style>
         :root {
             --bg: #0a0a14; --panel: #111122; --border: #334;
@@ -159,7 +159,7 @@
             <div style="display:flex;width:100%;height:100%;padding:8px;gap:8px;">
                 <div class="panel" style="width:200px;overflow-y:auto;max-height:100%;" id="slot-list"></div>
                 <div class="panel" style="flex:1;text-align:center;" id="robot-display"></div>
-                <div class="panel" style="width:260px;" id="robot-stats"></div>
+                <div class="panel" style="width:280px;" id="robot-stats"></div>
             </div>
             <div id="owner-code-area">
                 <input id="owner-code-input" placeholder="OWNER CODE">
@@ -244,21 +244,52 @@
             'Octanian': { effect: 'Speed', desc: '+15% скорости', parts: 15 },
         };
 
-        const BOSSES = {
-            'Titan': { hp: 4000, speed: 2.0, slots: ['heavy', 'heavy', 'heavy'], ability: 'Stomp', color: '#ff0000' },
-            'Overlord': { hp: 3000, speed: 3.5, slots: ['medium', 'medium', 'medium', 'medium'], ability: 'Rocket Swarm', color: '#990000' },
-            'Reaper': { hp: 2500, speed: 6.0, slots: ['heavy', 'heavy', 'light', 'light'], ability: 'Dash+Execute', color: '#330000' },
-        };
-
         const OBSTACLES = [
             { x: 200, y: 200, w: 80, h: 20 }, { x: 500, y: 150, w: 20, h: 80 }, { x: 750, y: 300, w: 100, h: 20 },
             { x: 300, y: 450, w: 20, h: 100 }, { x: 600, y: 500, w: 120, h: 20 }, { x: 850, y: 450, w: 20, h: 90 },
             { x: 100, y: 350, w: 60, h: 20 },
         ];
 
+        const MODULES = {
+            'Armor Kit': { effect: 'Armor Kit', desc: '+8% HP за уровень', baseCost: 200, maxLevel: 3, type: 'hp' },
+            'Nuclear Reactor': { effect: 'Nuclear Reactor', desc: '+5% урона за уровень', baseCost: 200, maxLevel: 3, type: 'damage' },
+            'Battle Born': { effect: 'Battle Born', desc: '3 сек неуязвимости после спавна', baseCost: 500, maxLevel: 1, type: 'spawn_invulnerable' },
+            'Last Stand': { effect: 'Last Stand', desc: 'Неуязвимость 1.5 сек при HP<20%', baseCost: 3, currency: 'gold', maxLevel: 1, type: 'last_stand' },
+            'Mechanic': { effect: 'Mechanic', desc: '+0.5% HP/сек за уровень', baseCost: 400, maxLevel: 3, type: 'regen' },
+            'Road Hog': { effect: 'Road Hog', desc: '+6% скорости за уровень', baseCost: 300, maxLevel: 3, type: 'speed' },
+        };
+
+        const PILOTS = {
+            'Destrier': { name: 'Commander Aegis', uniqueSkill: 'Броня +10%' },
+            'Phantom': { name: 'Ghost Walker', uniqueSkill: 'Скорость после Blink +20%' },
+            'Kaji': { name: 'Mine Layer', uniqueSkill: 'Мины +50% урона' },
+            'Raptor': { name: 'Comet Master', uniqueSkill: 'Comet Splash +30% урона' },
+            'Hawk': { name: 'Sky Striker', uniqueSkill: 'Урон в полёте +25%' },
+            'Bulgasari': { name: 'Dash Expert', uniqueSkill: '+1 заряд Dash' },
+            'Scorpion Ultimate': { name: 'Shadow Stalker', uniqueSkill: 'Backstab Teleport +75% урона' },
+            'Lancelot Ultimate': { name: 'Shield Bearer', uniqueSkill: 'Самоисцеление +50%' },
+            'Typhoon Ultimate': { name: 'EMP Specialist', uniqueSkill: 'EMP Blast +1 сек для игрока' },
+            'Seraph': { name: 'Storm Caller', uniqueSkill: 'Electric Storm +40% урона' },
+            'Harpy': { name: 'Fire Lord', uniqueSkill: 'Firestorm +35% урона' },
+            'Shell': { name: 'Explosive Expert', uniqueSkill: 'Explosive Shell +50% отброс' },
+            'Erebus': { name: 'Void Master', uniqueSkill: 'Blackout +1 сек стана' },
+            'Nodens': { name: 'Healing Sage', uniqueSkill: 'Healing Burst +40%' },
+        };
+
+        const RANDOM_SKILLS = [
+            'Armor Expert (+6% HP)',
+            'Road Hog (+6% скорости)',
+            'Master Gunsmith (+2.2% урона)',
+            'Mechanic (0.25% HP/сек)',
+            'Destroyer (+5% урона способности)',
+            'Wonderworker (+3.75% HP при активации способности)',
+            'Scout (+3.75% скорости, -2.5% HP)',
+            'Tough Guy (+7.5% HP, -1.25% урона)',
+        ];
+
         // ==================== GAME STATE ====================
         let currentAccount = null, accounts = {}, silver = 0, gold = 0, parts = {}, hangarSlots = [], selectedSlot = 0, lastGiftTime = 0;
-        let battleMode = null, player = null, enemies = [], allies = [], bullets = [], particles = [], capturePoints = [], wave = 1, combatActive = false, currentRobotIndex = 0, captureScore = 0, gameLoopId = null, barrelUsed = false;
+        let battleMode = null, player = null, enemies = [], allies = [], bullets = [], particles = [], capturePoints = [], wave = 1, combatActive = false, currentRobotIndex = 0, captureScore = 0, gameLoopId = null, barrelUsed = false, lastStandUsed = false;
         const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
         let mouseX = 500, mouseY = 320, keys = {}, mouseDown = false;
 
@@ -303,15 +334,15 @@
             a.silver = silver; a.gold = gold; a.parts = JSON.parse(JSON.stringify(parts));
             a.hangarSlots = JSON.parse(JSON.stringify(hangarSlots)); a.lastGiftTime = lastGiftTime;
             a.password = a.password || '';
-            localStorage.setItem('warRobots_v24', JSON.stringify(accounts));
+            localStorage.setItem('warRobots_v25', JSON.stringify(accounts));
         }
         function loadAccount(name) {
-            const s = localStorage.getItem('warRobots_v24');
+            const s = localStorage.getItem('warRobots_v25');
             if (s) { try { accounts = JSON.parse(s); } catch (e) { accounts = {}; } }
             const d = accounts[name]; if (!d) return false;
             currentAccount = name; silver = d.silver||500; gold = d.gold||50; parts = d.parts||{};
             hangarSlots = d.hangarSlots||[]; lastGiftTime = d.lastGiftTime||0;
-            while (hangarSlots.length < 5) hangarSlots.push({ robotName: null, weapons: [], drone: null, mkLevel: 'MK1', level: 1, currentHp: null });
+            while (hangarSlots.length < 5) hangarSlots.push({ robotName: null, weapons: [], drone: null, mkLevel: 'MK1', level: 1, currentHp: null, modules: [null, null], pilot: null });
             hangarSlots.forEach(s => {
                 if (!s.weapons) s.weapons = [];
                 s.weapons = s.weapons.map(w => {
@@ -321,20 +352,22 @@
                 });
                 if (!s.mkLevel) s.mkLevel='MK1'; if (!s.level) s.level=1;
                 if (s.currentHp===undefined) s.currentHp=null; if (!s.drone) s.drone=null;
+                if (!s.modules) s.modules = [null, null];
+                if (!s.pilot) s.pilot = null;
             });
             ensurePartsKeys();
-            if (!hangarSlots.some(s=>s.robotName)) hangarSlots[0] = { robotName:'Destrier', weapons:[{name:'LightCannon',mkLevel:'MK1',level:1},null], drone:null, mkLevel:'MK1', level:1, currentHp:null };
+            if (!hangarSlots.some(s=>s.robotName)) hangarSlots[0] = { robotName:'Destrier', weapons:[{name:'LightCannon',mkLevel:'MK1',level:1},null], drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null };
             saveAccount(); setTimeout(()=>canvas.focus(), 100); return true;
         }
         function initNewAccount(name) {
             currentAccount=name; silver=500; gold=50; parts={}; ensurePartsKeys();
             parts['LightCannon']=3; parts['Taran']=6; parts['Zeus']=15; parts['Ultimate Sting']=25;
             hangarSlots = [
-                { robotName:'Destrier', weapons:[{name:'LightCannon',mkLevel:'MK1',level:1},null], drone:null, mkLevel:'MK1', level:1, currentHp:null },
-                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null },
-                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null },
-                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null },
-                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null },
+                { robotName:'Destrier', weapons:[{name:'LightCannon',mkLevel:'MK1',level:1},null], drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null },
+                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null },
+                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null },
+                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null },
+                { robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null },
             ];
             lastGiftTime=0; if (!accounts[name]) accounts[name]={password:''};
             saveAccount(); showHangar(); setTimeout(()=>canvas.focus(),100);
@@ -379,7 +412,19 @@
                 if (w && w.name) { const dmg = getWeaponDamage(w); wepInfo += `<p>🔫 ${w.name} (${dmg} dmg) ${w.mkLevel}.${w.level} <button onclick="upgradeWeapon(${i})" style="font-size:10px;padding:2px 5px;">↑</button></p>`; }
                 else wepInfo += `<p>⚪ слот ${i+1}: пусто</p>`;
             });
-            st.innerHTML = `<h4 style="color:${r.color};">${s.robotName}</h4><p>❤️ HP: ${Math.round(getRobotStat(s,'hp'))}</p><p>🏃 Скорость: ${getRobotStat(s,'speed').toFixed(1)}</p><p>⭐ ${s.mkLevel}.${s.level}</p><p>🎯 ${r.ability||'Нет'}</p>${wepInfo}<p>🛸 ${s.drone||'Нет'}</p><button onclick="upgradeRobot()" class="gold">Улучшить робота</button><button onclick="openRobotSelectionModal()">Сменить</button>`;
+            let modInfo = '<p>🔧 Модули:</p>';
+            s.modules.forEach((m,i)=>{
+                if (m) modInfo += `<p>Слот ${i+1}: ${m.name} (ур.${m.level}) <button onclick="upgradeModule(${i})" style="font-size:10px;padding:2px 5px;">↑</button> <button onclick="unequipModule(${i})" style="font-size:10px;padding:2px 5px;">✕</button></p>`;
+                else modInfo += `<p>Слот ${i+1}: <button onclick="openModuleSelectionModal(${i})" style="font-size:10px;padding:2px 5px;">Установить</button></p>`;
+            });
+            let pilotInfo = `<p>👨‍✈️ Пилот: ${s.pilot ? s.pilot.name + ' (' + s.pilot.uniqueSkill + ')' : 'Нет'}</p>`;
+            if (s.pilot) {
+                pilotInfo += `<p>🎯 Навыки: ${s.pilot.skills.join(', ')}</p>`;
+                pilotInfo += `<button onclick="rerollPilotSkills()" style="font-size:10px;padding:2px 5px;">🎲 Перебросить навыки (50💰)</button> <button onclick="removePilot()" style="font-size:10px;padding:2px 5px;">✕ Уволить</button>`;
+            } else {
+                pilotInfo += `<button onclick="assignPilot()" style="font-size:10px;padding:2px 5px;">Назначить пилота</button>`;
+            }
+            st.innerHTML = `<h4 style="color:${r.color};">${s.robotName}</h4><p>❤️ HP: ${Math.round(getRobotStat(s,'hp'))}</p><p>🏃 Скорость: ${getRobotStat(s,'speed').toFixed(1)}</p><p>⭐ ${s.mkLevel}.${s.level}</p><p>🎯 ${r.ability||'Нет'}</p>${wepInfo}${modInfo}${pilotInfo}<p>🛸 ${s.drone||'Нет'}</p><button onclick="upgradeRobot()" class="gold">Улучшить робота</button><button onclick="openRobotSelectionModal()">Сменить</button>`;
         }
         function upgradeWeapon(idx) {
             const s = hangarSlots[selectedSlot]; if (!s || !s.weapons[idx] || !s.weapons[idx].name) return;
@@ -387,6 +432,74 @@
             if (cost.type === 'level') { if (silver < cost.cost) return; silver -= cost.cost; w.level++; }
             else if (cost.type === 'mk2') { if (gold < cost.cost) return; gold -= cost.cost; w.mkLevel = 'MK2'; w.level = 1; }
             else if (cost.type === 'mk3') { if (gold < cost.costGold || silver < cost.costSilver) return; gold -= cost.costGold; silver -= cost.costSilver; w.mkLevel = 'MK3'; w.level = 1; }
+            saveAccount(); updateHangarUI();
+        }
+        function openModuleSelectionModal(slotIndex) {
+            let h = '<h3>Выбор модуля</h3><button class="close-btn" onclick="hideModal()">✕</button>';
+            for (let [n,d] of Object.entries(MODULES)) {
+                const cost = d.baseCost;
+                const currency = d.currency || 'silver';
+                const canBuy = currency === 'gold' ? gold >= cost : silver >= cost;
+                h += `<div class="item-row ${canBuy?'':'locked'}" onclick="${canBuy?'equipModule('+slotIndex+',\''+n+'\')':''}" style="${canBuy?'':'opacity:0.5'}"><span>${n}: ${d.desc}</span><span>${cost}${currency==='gold'?'⭐':'💰'}</span></div>`;
+            }
+            showModal(h);
+        }
+        function equipModule(slotIndex, moduleName) {
+            const mod = MODULES[moduleName];
+            if (!mod) return;
+            const cost = mod.baseCost;
+            const currency = mod.currency || 'silver';
+            if (currency === 'gold' && gold < cost) return;
+            if (currency === 'silver' && silver < cost) return;
+            if (currency === 'gold') gold -= cost;
+            else silver -= cost;
+            hangarSlots[selectedSlot].modules[slotIndex] = { name: moduleName, level: 1 };
+            saveAccount(); hideModal(); updateHangarUI();
+        }
+        function upgradeModule(slotIndex) {
+            const mod = hangarSlots[selectedSlot].modules[slotIndex];
+            if (!mod) return;
+            const def = MODULES[mod.name];
+            if (!def || mod.level >= def.maxLevel) return;
+            const cost = def.baseCost + (mod.level - 1) * 100;
+            if (silver < cost) return;
+            silver -= cost;
+            mod.level++;
+            saveAccount(); updateHangarUI();
+        }
+        function unequipModule(slotIndex) {
+            hangarSlots[selectedSlot].modules[slotIndex] = null;
+            saveAccount(); updateHangarUI();
+        }
+        function assignPilot() {
+            const s = hangarSlots[selectedSlot];
+            if (!s.robotName || !PILOTS[s.robotName]) return;
+            const pdef = PILOTS[s.robotName];
+            const skills = [];
+            const pool = [...RANDOM_SKILLS];
+            for (let i = 0; i < 2; i++) {
+                const idx = Math.floor(Math.random() * pool.length);
+                skills.push(pool.splice(idx, 1)[0]);
+            }
+            s.pilot = { name: pdef.name, uniqueSkill: pdef.uniqueSkill, skills };
+            saveAccount(); updateHangarUI();
+        }
+        function rerollPilotSkills() {
+            const s = hangarSlots[selectedSlot];
+            if (!s.pilot) return;
+            if (silver < 50) return;
+            silver -= 50;
+            const pool = [...RANDOM_SKILLS];
+            const skills = [];
+            for (let i = 0; i < 2; i++) {
+                const idx = Math.floor(Math.random() * pool.length);
+                skills.push(pool.splice(idx, 1)[0]);
+            }
+            s.pilot.skills = skills;
+            saveAccount(); updateHangarUI();
+        }
+        function removePilot() {
+            hangarSlots[selectedSlot].pilot = null;
             saveAccount(); updateHangarUI();
         }
         function openRobotSelectionModal() {
@@ -401,7 +514,7 @@
             if (name!=='Destrier' && (parts[name]||0) < d.parts) { alert('Недостаточно деталей!'); return; }
             if (name!=='Destrier') parts[name]-=d.parts;
             const curWeps = hangarSlots[selectedSlot].weapons ? [...hangarSlots[selectedSlot].weapons] : [];
-            hangarSlots[selectedSlot] = { robotName:name, weapons:new Array(d.slots.length).fill(null), drone:null, mkLevel:'MK1', level:1, currentHp:null };
+            hangarSlots[selectedSlot] = { robotName:name, weapons:new Array(d.slots.length).fill(null), drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null };
             for (let i=0; i<Math.min(curWeps.length, d.slots.length); i++) {
                 if (curWeps[i] && curWeps[i].name && WEAPONS[curWeps[i].name] && WEAPONS[curWeps[i].name].type === d.slots[i])
                     hangarSlots[selectedSlot].weapons[i] = curWeps[i];
@@ -457,8 +570,8 @@
                         const fitting = Object.entries(WEAPONS).filter(([n,d])=>d.type===slotType);
                         return fitting.length>0 ? { name: fitting[0][0], mkLevel:'MK3', level:1 } : null;
                     });
-                    hangarSlots.push({ robotName: rName, weapons, drone:'Octanian', mkLevel:'MK3', level:1, currentHp:null });
-                } else hangarSlots.push({ robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null });
+                    hangarSlots.push({ robotName: rName, weapons, drone:'Octanian', mkLevel:'MK3', level:1, currentHp:null, modules:[null,null], pilot:null });
+                } else hangarSlots.push({ robotName:null, weapons:[], drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null });
             }
             selectedSlot=0; saveAccount(); updateHangarUI();
             showToast('OWNERCODE активирован! Всё открыто.');
@@ -507,45 +620,13 @@
                 dashCharges: 3, dashRechargeTimer: 0, abilityTimer: 0,
                 color: r.color, slots: r.slots,
                 attackCooldown: 0, shootTimer: Math.random(),
-                firestorm: null, isBoss: false, bossType: null,
+                firestorm: null,
                 stuckX: 0, stuckY: 0, stuckTimer: 0,
                 slow: null, poison: null, fire: null,
+                modules: [null, null], pilot: null,
             };
             if (drone === 'Octanian') entity.speed *= 1.15;
             return entity;
-        }
-
-        function createBossEntity(bossType, level) {
-            const b = BOSSES[bossType];
-            const weapons = [];
-            const weaponData = [];
-            const weaponState = [];
-            b.slots.forEach(slotType => {
-                const fitting = Object.entries(WEAPONS).filter(([n,d]) => d.type === slotType);
-                if (fitting.length > 0) {
-                    const wn = fitting[Math.floor(Math.random() * fitting.length)][0];
-                    weapons.push(wn);
-                    weaponData.push({...WEAPONS[wn], dmg: WEAPONS[wn].dmg * 1.5});
-                    weaponState.push({ammo: WEAPONS[wn].mag, reloading: 0, cooldown: 0});
-                }
-            });
-            const hpMult = [1.00, 1.08, 1.16, 1.24, 1.32, 1.40, 1.48, 1.56, 1.64, 1.72, 1.80, 1.88][Math.min(level-1, 11)];
-            return {
-                robotName: bossType, mkLevel: 'MK1', level, team: 'enemy',
-                x: 0, y: 0, radius: 28,
-                hp: b.hp * hpMult, maxHp: b.hp * hpMult,
-                speed: b.speed,
-                weapons, weaponData, weaponState,
-                drone: null, ability: b.ability,
-                abilityCooldown: 300, invulnerable: 0, invisTimer: 0, damageBoost: 1,
-                stunned: 0, electricAura: 0, healAura: 0, selfHeal: 0,
-                dashCharges: 3, dashRechargeTimer: 0, abilityTimer: 0,
-                color: b.color, slots: b.slots,
-                attackCooldown: 0, shootTimer: 0,
-                firestorm: null, isBoss: true, bossType,
-                stuckX: 0, stuckY: 0, stuckTimer: 0,
-                slow: null, poison: null, fire: null,
-            };
         }
 
         // ==================== BATTLE ====================
@@ -554,7 +635,7 @@
             for (let i=0; i<hangarSlots.length; i++) { if (hangarSlots[i].robotName && ROBOTS[hangarSlots[i].robotName] && (hangarSlots[i].currentHp===null||hangarSlots[i].currentHp>0)) { al=i; break; } }
             if (al===-1) { showToast('❌ Нет живых роботов!'); return; }
             hangarSlots.forEach(s=>{ if (s.robotName&&ROBOTS[s.robotName]) s.currentHp=Math.round(getRobotStat(s,'hp')); });
-            battleMode=mode; currentRobotIndex=al; captureScore=0; barrelUsed=false;
+            battleMode=mode; currentRobotIndex=al; captureScore=0; barrelUsed=false; lastStandUsed=false;
             enemies=[]; allies=[]; bullets=[]; particles=[]; wave=1;
             capturePoints = mode==='CAPTURE' ? [{x:200,y:320,owner:null,progress:0},{x:500,y:320,owner:null,progress:0},{x:800,y:320,owner:null,progress:0}] : [];
 
@@ -571,15 +652,12 @@
                     ally.hp = slot.currentHp; ally.maxHp = Math.round(getRobotStat(slot, 'hp'));
                     allies.push(ally);
                 }
-                for (let i = 0; i < 4; i++) {
+                for (let i = 0; i < 5; i++) {
                     const rName = Object.keys(ROBOTS)[Math.floor(Math.random() * Object.keys(ROBOTS).length)];
                     const enemy = createRobotEntity(rName, 'MK1', Math.floor(Math.random()*12)+1, 0.3, 'enemy');
                     enemy.x = 600 + i * 60; enemy.y = 200 + i * 40;
                     enemies.push(enemy);
                 }
-                const boss = createBossEntity(Object.keys(BOSSES)[Math.floor(Math.random()*3)], 5);
-                boss.x = 700; boss.y = 320;
-                enemies.push(boss);
             } else if (mode === 'CAPTURE') {
                 spawnPlayerRobot();
                 spawnRobotEnemies(3, 1);
@@ -605,22 +683,61 @@
             if (!s || !s.robotName || !ROBOTS[s.robotName]) return;
             const r = ROBOTS[s.robotName]; let spd = getRobotStat(s,'speed');
             if (s.drone==='Octanian') { spd*=1.15; showToast('⚡ Octanian: скорость +15%'); }
+            let maxHp = Math.round(getRobotStat(s,'hp'));
+            let dmgBoost = 1;
+            let selfHeal = 0;
+            let spawnInvuln = 0;
+
+            // Применяем модули
+            s.modules.forEach(m => {
+                if (!m) return;
+                if (m.name === 'Armor Kit') maxHp *= (1 + 0.08 * m.level);
+                if (m.name === 'Nuclear Reactor') dmgBoost *= (1 + 0.05 * m.level);
+                if (m.name === 'Battle Born') spawnInvuln = 180;
+                if (m.name === 'Mechanic') selfHeal += 0.005 * m.level;
+                if (m.name === 'Road Hog') spd *= (1 + 0.06 * m.level);
+            });
+
+            // Применяем пилота
+            if (s.pilot) {
+                showToast('👨‍✈️ Пилот ' + s.pilot.name + ': ' + s.pilot.uniqueSkill);
+                if (s.robotName === 'Destrier') maxHp *= 1.10;
+                if (s.robotName === 'Bulgasari') dashCharges = 4;
+                s.pilot.skills.forEach(sk => {
+                    if (sk.includes('Armor Expert')) maxHp *= 1.06;
+                    if (sk.includes('Road Hog')) spd *= 1.06;
+                    if (sk.includes('Master Gunsmith')) dmgBoost *= 1.022;
+                    if (sk.includes('Mechanic (0.25%')) selfHeal += 0.0025;
+                    if (sk.includes('Destroyer')) { /* +5% ability dmg */ }
+                    if (sk.includes('Scout')) { spd *= 1.0375; maxHp *= 0.975; }
+                    if (sk.includes('Tough Guy')) { maxHp *= 1.075; dmgBoost *= 0.9875; }
+                });
+            }
+
             player = {
-                x:500, y:500, radius:18, hp: s.currentHp||Math.round(getRobotStat(s,'hp')), maxHp: Math.round(getRobotStat(s,'hp')),
-                speed: Math.min(7.0, spd), robotName: s.robotName,
+                x:500, y:500, radius:18,
+                hp: s.currentHp || maxHp,
+                maxHp: maxHp,
+                speed: Math.min(7.0, spd),
+                robotName: s.robotName,
                 weapons: s.weapons.filter(w=>w&&w.name&&WEAPONS[w.name]).map(w=>w.name),
                 weaponData: s.weapons.filter(w=>w&&w.name&&WEAPONS[w.name]).map(w=>({...WEAPONS[w.name], dmg: getWeaponDamage(w)})),
                 weaponState: s.weapons.filter(w=>w&&w.name&&WEAPONS[w.name]).map(w=>({ammo:WEAPONS[w.name].mag, reloading:0, cooldown:0})),
-                drone: s.drone, ability: r.ability, abilityCooldown:0, invulnerable:0, invisTimer:0, damageBoost:1,
-                stunned:0, electricAura:0, healAura:0, slotIndex: currentRobotIndex, dashCharges:3, dashRechargeTimer:0, selfHeal:0,
+                drone: s.drone, ability: r.ability,
+                abilityCooldown:0, invulnerable: spawnInvuln, invisTimer:0, damageBoost: dmgBoost,
+                stunned:0, electricAura:0, healAura:0, slotIndex: currentRobotIndex,
+                dashCharges: r.ability==='Dash'? (s.pilot?.name==='Dash Expert'?4:3) : 3,
+                dashRechargeTimer:0, selfHeal: selfHeal,
                 team: 'player', slow: null, poison: null, fire: null,
+                modules: s.modules, pilot: s.pilot,
             };
+            lastStandUsed = false;
         }
 
         function switchRobotInBattle(idx) {
             if (!combatActive || idx<0 || idx>=hangarSlots.length || idx===currentRobotIndex) return;
             const slot = hangarSlots[idx]; if (!slot.robotName || (slot.currentHp!==null && slot.currentHp<=0)) return;
-            currentRobotIndex = idx; barrelUsed = false; spawnPlayerRobot(); updateCombatUI();
+            currentRobotIndex = idx; barrelUsed = false; lastStandUsed = false; spawnPlayerRobot(); updateCombatUI();
         }
 
         function spawnRobotEnemies(count, waveNum) {
@@ -635,24 +752,11 @@
                 enemy.hp *= hpMult; enemy.maxHp *= hpMult;
                 enemies.push(enemy);
             }
-            if (battleMode === 'TDM' && waveNum >= 3 && waveNum % 3 === 0) {
-                const bossCount = waveNum >= 6 ? 2 : 1;
-                for (let b = 0; b < bossCount; b++) {
-                    const boss = createBossEntity(Object.keys(BOSSES)[Math.floor(Math.random()*3)], waveNum);
-                    boss.x = Math.random()*800+100; boss.y = Math.random()*440+100;
-                    boss.hp *= hpMult; boss.maxHp *= hpMult;
-                    enemies.push(boss);
-                }
-            }
-            const surfHp = battleMode === 'SURVIVAL' ? (waveNum >= 15 ? 2.5 : waveNum >= 10 ? 1.6 : waveNum >= 5 ? 1.3 : 1) : 1;
-            if (battleMode === 'SURVIVAL' && waveNum === 5) { const boss = createBossEntity(Object.keys(BOSSES)[Math.floor(Math.random()*3)], 5); boss.x=700; boss.y=320; boss.hp*=surfHp; boss.maxHp*=surfHp; enemies.push(boss); }
-            if (battleMode === 'SURVIVAL' && waveNum === 10) { for (let b=0; b<2; b++) { const boss = createBossEntity(Object.keys(BOSSES)[Math.floor(Math.random()*3)], 10); boss.x=600+b*200; boss.y=320; boss.hp*=surfHp; boss.maxHp*=surfHp; enemies.push(boss); } }
-            if (battleMode === 'SURVIVAL' && waveNum >= 15) { for (let b=0; b<3; b++) { const boss = createBossEntity(Object.keys(BOSSES)[Math.floor(Math.random()*3)], 15); boss.x=400+b*200; boss.y=320; boss.hp*=surfHp; boss.maxHp*=surfHp; enemies.push(boss); } }
         }
 
         function spawnDuelEnemy() {
             const enemy = createRobotEntity('Scorpion Ultimate', 'MK2', 6, 0.5, 'enemy');
-            enemy.x = 700; enemy.y = 320; enemy.hp *= 1.5; enemy.maxHp *= 1.5;
+            enemy.x = 700; enemy.y = 320; enemy.hp *= 2; enemy.maxHp *= 2;
             enemies.push(enemy);
         }
 
@@ -665,44 +769,39 @@
             const a=entity.ability;
             if (a==='Blink') { cd=180; const ang=Math.atan2(targetY-entity.y, targetX-entity.x); entity.x+=Math.cos(ang)*180; entity.y+=Math.sin(ang)*180; }
             else if (a==='Mining') { 
-                cd=300; 
-                entity.invisTimer=180; 
-                entity.invulnerable=180;
+                cd=300; entity.invisTimer=180; entity.invulnerable=180;
                 const mineObj = { 
                     x:entity.x, y:entity.y, type:'mine', radius:15, hp:1, maxHp:1, 
-                    speed:0, meleeDmg:100, attackCooldown:0, shootRange:0, shootDmg:0, 
+                    speed:0, meleeDmg: (entity.pilot?.name==='Mine Layer'?150:100), attackCooldown:0, shootRange:0, shootDmg:0, 
                     shootCd:0, shootTimer:0, color:'#555555', stunned:0, slow:null, 
                     poison:null, fire:null, team:entity.team, isMine:true, 
                     weaponData:[], weaponState:[], weapons:[], ability:null, 
                     abilityCooldown:0, invulnerable:0, invisTimer:0, damageBoost:1, 
                     electricAura:0, healAura:0, selfHeal:0, dashCharges:0, 
-                    dashRechargeTimer:0, abilityTimer:0, isBoss:false, bossType:null, 
+                    dashRechargeTimer:0, abilityTimer:0,
                     stuckX:0, stuckY:0, stuckTimer:0, robotName:'Mine', mkLevel:'MK1', 
                     level:1, drone:null, slots:[], attackCooldown:0, shootTimer:0, 
-                    firestorm:null, mineTimer:300
+                    firestorm:null, mineTimer:300,
+                    modules:[null,null], pilot:null,
                 };
                 if (entity.team === 'enemy') { enemies.push(mineObj); }
                 else { allies.push(mineObj); }
             }
-            else if (a==='Comet Splash') { cd=360; entity.y-=80; setTimeout(()=>{ if (combatActive) { const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); targets.forEach(e=>{ if(Math.hypot(e.x-entity.x, e.y-entity.y)<150) e.hp-=120; }); } }, 300); }
-            else if (a==='Transform') { cd=600; entity.damageBoost=2; entity.abilityTimer=240; }
+            else if (a==='Comet Splash') { cd=360; entity.y-=80; setTimeout(()=>{ if (combatActive) { const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); targets.forEach(e=>{ if(Math.hypot(e.x-entity.x, e.y-entity.y)<150) { let dmg = 120; if(entity.pilot?.name==='Comet Master') dmg *= 1.3; e.hp-=dmg; } }); } }, 300); }
+            else if (a==='Transform') { cd=600; entity.damageBoost = (entity.pilot?.name==='Sky Striker') ? 2.5 : 2; entity.abilityTimer=240; }
             else if (a==='Dash') { if (entity.dashCharges>0) { cd=120; entity.dashCharges--; const ang=Math.atan2(targetY-entity.y, targetX-entity.x); entity.x+=Math.cos(ang)*100; entity.y+=Math.sin(ang)*100; entity.invulnerable=10; } else return; }
-            else if (a==='Backstab Teleport') { cd=480; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); let nearest=null,nd=Infinity; targets.forEach(e=>{ if(e.hp>0){ const d=Math.hypot(e.x-entity.x,e.y-entity.y); if(d<nd){nd=d;nearest=e;} } }); if(nearest&&nd<450){ const ang=Math.atan2(nearest.y-entity.y, nearest.x-entity.x); entity.x=nearest.x-Math.cos(ang)*50; entity.y=nearest.y-Math.sin(ang)*50; entity.damageBoost=1.5; setTimeout(()=>{ entity.damageBoost=1; },3000); if(entity.drone==='Beak'){ entity.invisTimer=120; entity.invulnerable=120; showToast('🦅 Beak: невидимость 2 сек!'); } } }
-            else if (a==='Rush Shield') { cd=540; entity.speed*=2; entity.selfHeal=15; entity.abilityTimer=300; }
+            else if (a==='Backstab Teleport') { cd=480; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); let nearest=null,nd=Infinity; targets.forEach(e=>{ if(e.hp>0){ const d=Math.hypot(e.x-entity.x,e.y-entity.y); if(d<nd){nd=d;nearest=e;} } }); if(nearest&&nd<450){ const ang=Math.atan2(nearest.y-entity.y, nearest.x-entity.x); entity.x=nearest.x-Math.cos(ang)*50; entity.y=nearest.y-Math.sin(ang)*50; entity.damageBoost = (entity.pilot?.name==='Shadow Stalker') ? 1.75 : 1.5; setTimeout(()=>{ entity.damageBoost=1; },3000); if(entity.drone==='Beak'){ entity.invisTimer=120; entity.invulnerable=120; showToast('🦅 Beak: невидимость 2 сек!'); } } }
+            else if (a==='Rush Shield') { cd=540; entity.speed*=2; entity.selfHeal = (entity.pilot?.name==='Shield Bearer') ? 22.5 : 15; entity.abilityTimer=300; }
             else if (a==='EMP Blast') { 
                 cd=600; 
                 const targets = entity.team==='ally'||entity.team==='player' ? enemies : allies.concat([player]); 
                 targets.forEach(e=>{ 
                     if(Math.hypot(e.x-entity.x, e.y-entity.y)<300) {
                         if (entity.team === 'enemy' || entity.team === 'ally') { e.stunned = Math.min(e.stunned + 48, 48); }
-                        else { e.stunned = Math.min(e.stunned + 150, 150); }
+                        else { e.stunned = Math.min(e.stunned + (entity.pilot?.name==='EMP Specialist'?210:150), (entity.pilot?.name==='EMP Specialist'?210:150)); }
                     }
                 }); 
-                if (entity.drone === 'Discus') {
-                    entity.damageBoost = 1.5;
-                    showToast('💥 Discus: +50% урона на 3 сек!');
-                    setTimeout(() => { if(entity) entity.damageBoost = 1; }, 3000);
-                }
+                if (entity.drone === 'Discus') { entity.damageBoost = 1.5; showToast('💥 Discus: +50% урона на 3 сек!'); setTimeout(() => { if(entity) entity.damageBoost = 1; }, 3000); }
                 if (entity.robotName === 'Typhoon Ultimate' && (entity.team === 'player' || entity.team === 'ally')) {
                     const turretLevel = entity.level || 1;
                     const turretMk = entity.mkLevel || 'MK1';
@@ -713,38 +812,25 @@
                         radius: 16, hp: turretHp, maxHp: turretHp,
                         speed: 0, robotName: 'Turret', team: (entity.team === 'player' || entity.team === 'ally') ? 'ally' : 'enemy',
                         weapons: ['Ultimate Sting', 'Ultimate Sting'],
-                        weaponData: [
-                            { ...WEAPONS['Ultimate Sting'], dmg: stingDmg },
-                            { ...WEAPONS['Ultimate Sting'], dmg: stingDmg }
-                        ],
-                        weaponState: [
-                            { ammo: WEAPONS['Ultimate Sting'].mag, reloading: 0, cooldown: 0 },
-                            { ammo: WEAPONS['Ultimate Sting'].mag, reloading: 0, cooldown: 0 }
-                        ],
-                        drone: null, ability: null, abilityCooldown: 0,
-                        invulnerable: 0, invisTimer: 0, damageBoost: 1,
-                        stunned: 0, electricAura: 0, healAura: 0, selfHeal: 0,
-                        dashCharges: 0, dashRechargeTimer: 0, abilityTimer: 0,
-                        color: '#aa66ff', slots: ['medium', 'medium'],
-                        attackCooldown: 0, shootTimer: 0,
-                        firestorm: null, isBoss: false, bossType: null,
-                        stuckX: 0, stuckY: 0, stuckTimer: 0,
-                        slow: null, poison: null, fire: null,
-                        isMine: false, mkLevel: turretMk, level: turretLevel,
+                        weaponData: [ { ...WEAPONS['Ultimate Sting'], dmg: stingDmg }, { ...WEAPONS['Ultimate Sting'], dmg: stingDmg } ],
+                        weaponState: [ { ammo: WEAPONS['Ultimate Sting'].mag, reloading: 0, cooldown: 0 }, { ammo: WEAPONS['Ultimate Sting'].mag, reloading: 0, cooldown: 0 } ],
+                        drone: null, ability: null, abilityCooldown: 0, invulnerable: 0, invisTimer: 0, damageBoost: 1,
+                        stunned: 0, electricAura: 0, healAura: 0, selfHeal: 0, dashCharges: 0, dashRechargeTimer: 0, abilityTimer: 0,
+                        color: '#aa66ff', slots: ['medium', 'medium'], attackCooldown: 0, shootTimer: 0,
+                        firestorm: null, stuckX: 0, stuckY: 0, stuckTimer: 0,
+                        slow: null, poison: null, fire: null, isMine: false, mkLevel: turretMk, level: turretLevel,
+                        modules:[null,null], pilot:null,
                     };
                     if (turret.team === 'ally') allies.push(turret);
                     else enemies.push(turret);
                     showToast('🛡️ Турель 2x Ultimate Sting активирована!');
                 }
             }
-            else if (a==='Electric Storm') { cd=720; entity.electricAura=240; }
-            else if (a==='Firestorm') { cd=720; entity.firestorm={x:entity.x, y:entity.y, timer:300, radius:150, dps:30}; }
-            else if (a==='Explosive Shell') { cd=600; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); targets.forEach(e=>{ if(Math.hypot(e.x-entity.x, e.y-entity.y)<220){ e.hp-=150; const ang=Math.atan2(e.y-entity.y, e.x-entity.x); e.x+=Math.cos(ang)*80; e.y+=Math.sin(ang)*80; } }); }
-            else if (a==='Blackout') { cd=540; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); let nearest=null,nd=Infinity; targets.forEach(e=>{ if(e.hp>0){ const d=Math.hypot(e.x-entity.x,e.y-entity.y); if(d<nd){nd=d;nearest=e;} } }); if(nearest&&nd<350){ nearest.stunned=180; nearest.poison={dps:15,timer:300}; } }
-            else if (a==='Healing Burst') { cd=720; entity.healAura=360; }
-            else if (a==='Stomp') { cd=420; const targets = allies.concat([player]); targets.forEach(e=>{ if(Math.hypot(e.x-entity.x, e.y-entity.y)<200){ e.stunned=120; e.hp-=80; } }); }
-            else if (a==='Rocket Swarm') { cd=480; for(let i=0;i<10;i++){ const t = allies.concat([player]); const target = t[Math.floor(Math.random()*t.length)]; if(target){ const ang=Math.atan2(target.y-entity.y, target.x-entity.x); bullets.push({ x:entity.x, y:entity.y, vx:Math.cos(ang)*8, vy:Math.sin(ang)*8, damage:20, range:500, traveled:0, effect:'splash', radius:3, hit:false, color:'#ff4444', isEnemy:true, homingTarget:null, homingActive:false }); } } }
-            else if (a==='Dash+Execute') { cd=360; const targets = allies.concat([player]); let nearest=null,nd=Infinity; targets.forEach(e=>{ if(e.hp>0){ const d=Math.hypot(e.x-entity.x,e.y-entity.y); if(d<nd){nd=d;nearest=e;} } }); if(nearest){ const ang=Math.atan2(nearest.y-entity.y, nearest.x-entity.x); entity.x=nearest.x-Math.cos(ang)*30; entity.y=nearest.y-Math.sin(ang)*30; if(nearest.hp/nearest.maxHp<0.4) nearest.hp-=300; } }
+            else if (a==='Electric Storm') { cd=720; entity.electricAura = (entity.pilot?.name==='Storm Caller') ? 336 : 240; }
+            else if (a==='Firestorm') { cd=720; entity.firestorm={x:entity.x, y:entity.y, timer:300, radius:150, dps: (entity.pilot?.name==='Fire Lord')?40.5:30}; }
+            else if (a==='Explosive Shell') { cd=600; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); targets.forEach(e=>{ if(Math.hypot(e.x-entity.x, e.y-entity.y)<220){ e.hp-=150; const ang=Math.atan2(e.y-entity.y, e.x-entity.x); const dist = (entity.pilot?.name==='Explosive Expert')?120:80; e.x+=Math.cos(ang)*dist; e.y+=Math.sin(ang)*dist; } }); }
+            else if (a==='Blackout') { cd=540; const targets = entity.team==='ally'||entity.team==='player'?enemies:allies.concat([player]); let nearest=null,nd=Infinity; targets.forEach(e=>{ if(e.hp>0){ const d=Math.hypot(e.x-entity.x,e.y-entity.y); if(d<nd){nd=d;nearest=e;} } }); if(nearest&&nd<350){ nearest.stunned = (entity.pilot?.name==='Void Master') ? 240 : 180; nearest.poison={dps:15,timer:300}; } }
+            else if (a==='Healing Burst') { cd=720; entity.healAura = (entity.pilot?.name==='Healing Sage') ? 504 : 360; }
             entity.abilityCooldown=cd;
             entity.x=Math.max(15,Math.min(985,entity.x)); entity.y=Math.max(15,Math.min(625,entity.y));
         }
@@ -816,17 +902,8 @@
                     entityShoot(entity, nearest.x, nearest.y);
                 }
             } else {
-                if (entity.isBoss && entity.bossType === 'Titan') {
-                    if (dist>50) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
-                } else if (entity.isBoss && entity.bossType === 'Overlord') {
-                    if (dist<200) { entity.x -= (dx/dist)*entity.speed; entity.y -= (dy/dist)*entity.speed; }
-                    else if (dist>400) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
-                } else if (entity.isBoss && entity.bossType === 'Reaper') {
-                    if (dist>100) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
-                } else {
-                    if (dist<160) { entity.x -= (dx/dist)*entity.speed; entity.y -= (dy/dist)*entity.speed; }
-                    else if (dist>350) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
-                }
+                if (dist<160) { entity.x -= (dx/dist)*entity.speed; entity.y -= (dy/dist)*entity.speed; }
+                else if (dist>350) { entity.x += (dx/dist)*entity.speed; entity.y += (dy/dist)*entity.speed; }
 
                 const targetIsPlayer = (nearest === player);
                 const canShoot = !targetIsPlayer || (player && player.invisTimer <= 0);
@@ -857,7 +934,7 @@
             if (entity.abilityCooldown>0) entity.abilityCooldown--;
             if (entity.abilityTimer>0) { entity.abilityTimer--; if (entity.abilityTimer===0) { entity.damageBoost=1; entity.selfHeal=0; } }
             if (entity.dashRechargeTimer>0) entity.dashRechargeTimer--;
-            else if (entity.dashCharges<3 && entity.ability==='Dash') { entity.dashCharges++; entity.dashRechargeTimer=120; }
+            else if (entity.dashCharges< (entity.pilot?.name==='Dash Expert'?4:3) && entity.ability==='Dash') { entity.dashCharges++; entity.dashRechargeTimer=120; }
             if (entity.invisTimer>0) entity.invisTimer--;
             if (entity.invulnerable>0) entity.invulnerable--;
             if (entity.selfHeal>0) entity.hp = Math.min(entity.maxHp, entity.hp + entity.selfHeal/60);
@@ -882,6 +959,13 @@
                 shootBattle();
             }
             updateEntity(player);
+
+            // Last Stand
+            if (!lastStandUsed && player.modules && player.modules.some(m => m && m.name === 'Last Stand') && player.hp/player.maxHp < 0.2) {
+                lastStandUsed = true;
+                player.invulnerable = 90;
+                showToast('🛡️ Last Stand: неуязвимость 1.5 сек!');
+            }
 
             if (!barrelUsed && player.drone==='Barrel' && player.hp/player.maxHp<0.3) { barrelUsed=true; enemies.forEach(e=>{ if(Math.hypot(e.x-player.x, e.y-player.y)<180) e.hp-=100; }); showToast('💣 Barrel: взрывной урон врагам!'); }
 
@@ -939,9 +1023,10 @@
             const deadAllies = allies.filter(a=>a.hp<=0);
             const deadEnemies = enemies.filter(e=>e.hp<=0);
             deadEnemies.forEach(e=>{
-                silver+= e.isBoss ? 100 : 25; showToast(e.isBoss?'+100💰 БОСС!':'+25💰');
-                if (e.isBoss) { gold+=5; const items=[...Object.keys(ROBOTS),...Object.keys(WEAPONS),...Object.keys(DRONES)]; for(let i=0;i<2;i++) parts[items[Math.floor(Math.random()*items.length)]]++; showToast('+5⭐ +2 детали'); particles.push({x:e.x,y:e.y,type:'explosion',life:35}); }
-                else { if(Math.random()<0.15) gold+=3; if(Math.random()<0.25) { const allR=Object.keys(ROBOTS); const ritem=allR[Math.floor(Math.random()*allR.length)]; parts[ritem]=(parts[ritem]||0)+1; showToast('+1 деталь '+ritem); } particles.push({x:e.x,y:e.y,type:'explosion',life:20}); }
+                silver+=25; showToast('+25💰');
+                if (Math.random()<0.15) gold+=3;
+                if (Math.random()<0.25) { const allR=Object.keys(ROBOTS); const ritem=allR[Math.floor(Math.random()*allR.length)]; parts[ritem]=(parts[ritem]||0)+1; showToast('+1 деталь '+ritem); }
+                particles.push({x:e.x,y:e.y,type:'explosion',life:20});
             });
             allies = allies.filter(a=>a.hp>0);
             enemies = enemies.filter(e=>e.hp>0);
@@ -950,7 +1035,7 @@
             if (player.hp<=0) {
                 hangarSlots[currentRobotIndex].currentHp=0;
                 let found=false;
-                for(let i=0;i<hangarSlots.length;i++){ const idx=(currentRobotIndex+i+1)%hangarSlots.length; if(hangarSlots[idx].robotName&&hangarSlots[idx].currentHp>0){ currentRobotIndex=idx; barrelUsed=false; spawnPlayerRobot(); found=true; break; } }
+                for(let i=0;i<hangarSlots.length;i++){ const idx=(currentRobotIndex+i+1)%hangarSlots.length; if(hangarSlots[idx].robotName&&hangarSlots[idx].currentHp>0){ currentRobotIndex=idx; barrelUsed=false; lastStandUsed=false; spawnPlayerRobot(); found=true; break; } }
                 if (!found && allies.length > 0) {
                     const ally = allies[0];
                     player = ally;
@@ -995,52 +1080,33 @@
 
             allies.forEach(a=>{
                 if (a.robotName === 'Turret') {
-                    ctx.fillStyle = '#aa66ff';
-                    ctx.fillRect(a.x-14, a.y-14, 28, 28);
-                    ctx.strokeStyle = '#cc88ff';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(a.x-14, a.y-14, 28, 28);
-                    ctx.fillStyle = '#88ff00';
-                    ctx.beginPath(); ctx.arc(a.x-6, a.y-6, 3, 0, Math.PI*2); ctx.fill();
-                    ctx.beginPath(); ctx.arc(a.x+6, a.y+6, 3, 0, Math.PI*2); ctx.fill();
-                    const hpW = 30;
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(a.x-hpW/2-1, a.y-20, hpW+2, 7);
-                    ctx.fillStyle = '#44cc66';
-                    ctx.fillRect(a.x-hpW/2, a.y-19, hpW*Math.max(0, a.hp/a.maxHp), 5);
-                    ctx.fillStyle = '#fff';
-                    ctx.font = 'bold 7px sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('TURRET', a.x, a.y-24);
+                    ctx.fillStyle = '#aa66ff'; ctx.fillRect(a.x-14, a.y-14, 28, 28); ctx.strokeStyle = '#cc88ff'; ctx.lineWidth = 2; ctx.strokeRect(a.x-14, a.y-14, 28, 28);
+                    ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(a.x-6, a.y-6, 3, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(a.x+6, a.y+6, 3, 0, Math.PI*2); ctx.fill();
+                    const hpW = 30; ctx.fillStyle = '#000'; ctx.fillRect(a.x-hpW/2-1, a.y-20, hpW+2, 7); ctx.fillStyle = '#44cc66'; ctx.fillRect(a.x-hpW/2, a.y-19, hpW*Math.max(0, a.hp/a.maxHp), 5);
+                    ctx.fillStyle = '#fff'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('TURRET', a.x, a.y-24);
                 } else {
                     ctx.fillStyle='#4488ff';ctx.beginPath();ctx.arc(a.x,a.y,a.radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.stroke();
-                    const hpW=a.radius*2; ctx.fillStyle='#000';ctx.fillRect(a.x-hpW/2-1, a.y-a.radius-13, hpW+2, 9);
-                    ctx.fillStyle='#44cc66';ctx.fillRect(a.x-hpW/2, a.y-a.radius-12, hpW*Math.max(0,a.hp/a.maxHp), 7);
+                    const hpW=a.radius*2; ctx.fillStyle='#000';ctx.fillRect(a.x-hpW/2-1, a.y-a.radius-13, hpW+2, 9); ctx.fillStyle='#44cc66';ctx.fillRect(a.x-hpW/2, a.y-a.radius-12, hpW*Math.max(0,a.hp/a.maxHp), 7);
                     ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(a.robotName,a.x,a.y-a.radius-16);
                 }
             });
 
             enemies.forEach(e=>{
-                ctx.fillStyle=e.stunned>0?'#ffff00':e.color;
-                ctx.beginPath();ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.stroke();
-                const hpW=e.radius*2; ctx.fillStyle='#000';ctx.fillRect(e.x-hpW/2-1, e.y-e.radius-13, hpW+2, 9);
-                ctx.fillStyle=(e.hp/e.maxHp)<0.3?'#ff3344':'#ff6644';ctx.fillRect(e.x-hpW/2, e.y-e.radius-12, hpW*Math.max(0,e.hp/e.maxHp), 7);
-                if(e.isBoss){ ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText('👑 '+e.robotName,e.x,e.y-e.radius-18); }
+                ctx.fillStyle=e.stunned>0?'#ffff00':e.color; ctx.beginPath();ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.stroke();
+                const hpW=e.radius*2; ctx.fillStyle='#000';ctx.fillRect(e.x-hpW/2-1, e.y-e.radius-13, hpW+2, 9); ctx.fillStyle=(e.hp/e.maxHp)<0.3?'#ff3344':'#ff6644';ctx.fillRect(e.x-hpW/2, e.y-e.radius-12, hpW*Math.max(0,e.hp/e.maxHp), 7);
             });
 
             if (player) {
-                ctx.fillStyle=player.invulnerable>0?'#fff':(ROBOTS[player.robotName]?.color||'#888');
-                ctx.beginPath();ctx.arc(player.x,player.y,player.radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+                ctx.fillStyle=player.invulnerable>0?'#fff':(ROBOTS[player.robotName]?.color||'#888'); ctx.beginPath();ctx.arc(player.x,player.y,player.radius,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
                 if (player.weaponData.length>0) { const total=player.weaponData.length; for(let i=0;i<total;i++){ const wd=player.weaponData[i]; const fp=getWeaponFirePoint(i,total,player); const wpX=player.x+Math.cos(fp.angle)*(player.radius-3); const wpY=player.y+Math.sin(fp.angle)*(player.radius-3); ctx.fillStyle=wd.color||'#fff';ctx.beginPath();ctx.arc(wpX,wpY,wd.type==='heavy'?4:wd.type==='medium'?3:2,0,Math.PI*2);ctx.fill(); } }
                 if (player.drone) { const droneAngle=Date.now()/500; const dx=player.x+Math.cos(droneAngle)*28; const dy=player.y+Math.sin(droneAngle)*28; ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(dx,dy,5,0,Math.PI*2);ctx.fill(); }
                 const a=Math.atan2(mouseY-player.y,mouseX-player.x);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(player.x+Math.cos(a)*player.radius,player.y+Math.sin(a)*player.radius);ctx.lineTo(player.x+Math.cos(a-0.5)*(player.radius+9),player.y+Math.sin(a-0.5)*(player.radius+9));ctx.lineTo(player.x+Math.cos(a+0.5)*(player.radius+9),player.y+Math.sin(a+0.5)*(player.radius+9));ctx.fill();
-                const hpW=50;ctx.fillStyle='#333';ctx.fillRect(player.x-hpW/2,player.y-player.radius-16,hpW,6);
-                ctx.fillStyle=(player.hp/player.maxHp)<0.3?'#ff3344':'#44cc66';ctx.fillRect(player.x-hpW/2,player.y-player.radius-16,hpW*Math.max(0,player.hp/player.maxHp),6);
+                const hpW=50;ctx.fillStyle='#333';ctx.fillRect(player.x-hpW/2,player.y-player.radius-16,hpW,6); ctx.fillStyle=(player.hp/player.maxHp)<0.3?'#ff3344':'#44cc66';ctx.fillRect(player.x-hpW/2,player.y-player.radius-16,hpW*Math.max(0,player.hp/player.maxHp),6);
                 ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(player.robotName,player.x,player.y-player.radius-22);
             }
 
             bullets.forEach(b=>{ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,Math.PI*2);ctx.fill();});
-            particles.forEach(p=>{const a=Math.max(0,p.life/25);if(p.type==='explosion'){const r=p.life<15? (35-p.life)*2:(25-p.life)*2; ctx.fillStyle=`rgba(255,150,0,${a})`;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();}});
+            particles.forEach(p=>{const a=Math.max(0,p.life/25);if(p.type==='explosion'){const r=(25-p.life)*2; ctx.fillStyle=`rgba(255,150,0,${a})`;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();}});
         }
 
         function gameLoop() { if (combatActive) { updateCombat(); drawBattle(); gameLoopId = requestAnimationFrame(gameLoop); } }
@@ -1050,13 +1116,13 @@
         function setupEventListeners() {
             document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));document.getElementById('tab-'+b.dataset.tab).classList.add('active');}));
             document.getElementById('btn-login').addEventListener('click',()=>{const n=document.getElementById('login-name').value.trim(),p=document.getElementById('login-pass').value,m=document.getElementById('login-msg');if(!n||!p)m.textContent='Заполните поля';else if(!accounts[n])m.textContent='Не найден';else if(accounts[n].password!==p)m.textContent='Неверный пароль';else if(loadAccount(n))showHangar();});
-            document.getElementById('btn-register').addEventListener('click',()=>{const n=document.getElementById('reg-name').value.trim(),p=document.getElementById('reg-pass').value,p2=document.getElementById('reg-pass2').value,m=document.getElementById('login-msg');if(n.length<3)m.textContent='Имя: 3+ симв.';else if(p.length<4)m.textContent='Пароль: 4+ симв.';else if(p!==p2)m.textContent='Пароли не совпадают';else if(accounts[n])m.textContent='Занято';else{accounts[n]={password:p};localStorage.setItem('warRobots_v24',JSON.stringify(accounts));initNewAccount(n);accounts[n].password=p;saveAccount();showHangar();}});
-            document.getElementById('btn-guest').addEventListener('click',()=>{const gn='Guest_'+Math.floor(Math.random()*9000+1000);accounts[gn]={password:''};localStorage.setItem('warRobots_v24',JSON.stringify(accounts));initNewAccount(gn);showHangar();});
+            document.getElementById('btn-register').addEventListener('click',()=>{const n=document.getElementById('reg-name').value.trim(),p=document.getElementById('reg-pass').value,p2=document.getElementById('reg-pass2').value,m=document.getElementById('login-msg');if(n.length<3)m.textContent='Имя: 3+ симв.';else if(p.length<4)m.textContent='Пароль: 4+ симв.';else if(p!==p2)m.textContent='Пароли не совпадают';else if(accounts[n])m.textContent='Занято';else{accounts[n]={password:p};localStorage.setItem('warRobots_v25',JSON.stringify(accounts));initNewAccount(n);accounts[n].password=p;saveAccount();showHangar();}});
+            document.getElementById('btn-guest').addEventListener('click',()=>{const gn='Guest_'+Math.floor(Math.random()*9000+1000);accounts[gn]={password:''};localStorage.setItem('warRobots_v25',JSON.stringify(accounts));initNewAccount(gn);showHangar();});
             document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)hideModal();});
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const s = localStorage.getItem('warRobots_v24'); if (s) try { accounts = JSON.parse(s); } catch (e) { accounts = {}; }
+            const s = localStorage.getItem('warRobots_v25'); if (s) try { accounts = JSON.parse(s); } catch (e) { accounts = {}; }
             setupEventListeners();
             window.addEventListener('keydown', e => {
                 if (e.target.tagName === 'INPUT') return;
