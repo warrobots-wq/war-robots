@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action=manipulation">
   <title>War Robots v1.34 — Campaign & Fixes</title>
   <style>
     :root {
@@ -141,6 +141,7 @@
       padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 14px; display: none;
     }
     #surrender-btn.active { display: block; }
+    .bottom-btn { padding: 6px 10px !important; font-size: 12px !important; }
   </style>
 </head>
 <body>
@@ -212,14 +213,14 @@
       <span>👻<span id="soul-display">0</span></span>
       <button onclick="logout()" class="danger" style="font-size:12px;">Выйти</button>
     </div>
-    <div style="position:absolute;bottom:8px;left:8px;display:flex;gap:4px;flex-wrap:wrap;">
-      <button onclick="startBattle('TDM')" class="success">⚔️ TDM</button>
-      <button onclick="startBattle('CAPTURE')">🎯 ЗАХВАТ</button>
-      <button onclick="startBattle('SURVIVAL')">💀 ВЫЖИВАНИЕ</button>
-      <button onclick="startBattle('DUEL')">🤜 ДУЭЛЬ 1v1</button>
-      <button onclick="startBattle('TEAM')" class="team">👥 КОМАНДНЫЙ</button>
-      <button onclick="toggleNightMode()" id="night-mode-btn">🌙 Ночной режим</button>
-      <button onclick="openCampaign()" style="background: #886600;">📖 КАМПАНИЯ</button>
+    <div style="position:absolute;bottom:8px;left:8px;display:flex;gap:4px;flex-wrap:wrap;max-width:700px;">
+      <button onclick="startBattle('TDM')" class="success bottom-btn">⚔️ TDM</button>
+      <button onclick="startBattle('CAPTURE')" class="bottom-btn">🎯 ЗАХВАТ</button>
+      <button onclick="startBattle('SURVIVAL')" class="bottom-btn">💀 ВЫЖИВАНИЕ</button>
+      <button onclick="startBattle('DUEL')" class="bottom-btn">🤜 ДУЭЛЬ 1v1</button>
+      <button onclick="startBattle('TEAM')" class="team bottom-btn">👥 КОМАНДНЫЙ</button>
+      <button onclick="toggleNightMode()" id="night-mode-btn" class="bottom-btn">🌙 Ночной режим</button>
+      <button onclick="openCampaign()" class="bottom-btn" style="background: #886600;">📖 КАМПАНИЯ</button>
     </div>
     <div style="position:absolute;bottom:8px;right:8px;display:flex;gap:4px;">
       <button onclick="openBox()">📦 Ящик</button>
@@ -401,8 +402,8 @@ function openModuleSelectionModal(slotIndex) { let h = '<h3>Выбор моду�
 function equipModule(slotIndex, moduleName) { const mod = MODULES[moduleName]; if (!mod) return; const cost = mod.baseCost; const currency = mod.currency || 'silver'; if (currency === 'gold' && gold < cost) return; if (currency === 'silver' && silver < cost) return; if (currency === 'gold') gold -= cost; else silver -= cost; hangarSlots[selectedSlot].modules[slotIndex] = { name: moduleName, level: 1 }; saveAccount(); hideModal(); updateHangarUI(); }
 function upgradeModule(slotIndex) { const mod = hangarSlots[selectedSlot].modules[slotIndex]; if (!mod) return; const def = MODULES[mod.name]; if (!def || mod.level >= def.maxLevel) return; const cost = def.baseCost + (mod.level - 1) * 100; if (silver < cost) return; silver -= cost; mod.level++; saveAccount(); updateHangarUI(); }
 function unequipModule(slotIndex) { hangarSlots[selectedSlot].modules[slotIndex] = null; saveAccount(); updateHangarUI(); }
-function openRobotSelectionModal() { let h = '<h3>Сборка</h3><button class="close-btn" onclick="hideModal()">✕</button><div style="max-height:340px;overflow-y:auto;">'; for (let [n,d] of Object.entries(ROBOTS)) { if (d.costSouls) continue; const ow=isRobotOwned(n), hv=parts[n]||0, can=hv>= (d.parts||0) && !ow; h += `<div class="item-row ${ow?'owned':(!can?'locked':'')}" onclick="${can||(n==='Destrier'&&!ow)?'buildRobot(\''+n+'\')':''}" style="${!can&&!ow?'opacity:0.5':''}"><span>${n}${d.legendary?' 👑':''}</span><span>${ow?'✅':hv+'/'+(d.parts||0)}</span></div>`; } h += '</div>'; showModal(h); }
-function buildRobot(name) { const d=ROBOTS[name]; if(!d) return; if (isRobotOwned(name)) return; const needed = d.parts || 0; if (name!=='Destrier' && (parts[name]||0) < needed) { alert('Недостаточно деталей!'); return; } if (name!=='Destrier') parts[name]-=needed; const curWeps = hangarSlots[selectedSlot].weapons ? [...hangarSlots[selectedSlot].weapons] : []; hangarSlots[selectedSlot] = { robotName:name, weapons:new Array(d.slots.length).fill(null), drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null }; for (let i=0; i<Math.min(curWeps.length, d.slots.length); i++) { if (curWeps[i] && curWeps[i].name && WEAPONS[curWeps[i].name] && WEAPONS[curWeps[i].name].type === d.slots[i]) hangarSlots[selectedSlot].weapons[i] = curWeps[i]; } saveAccount(); hideModal(); updateHangarUI(); }
+function openRobotSelectionModal() { let h = '<h3>Сборка</h3><button class="close-btn" onclick="hideModal()">✕</button><div style="max-height:340px;overflow-y:auto;">'; for (let [n,d] of Object.entries(ROBOTS)) { if (d.costSouls) continue; const ow=isRobotOwned(n), hv=parts[n]||0, can=hv>= d.parts && !ow; h += `<div class="item-row ${ow?'owned':(!can?'locked':'')}" onclick="${can||(n==='Destrier'&&!ow)?'buildRobot(\''+n+'\')':''}" style="${!can&&!ow?'opacity:0.5':''}"><span>${n}${d.legendary?' 👑':''}</span><span>${ow?'✅':hv+'/'+d.parts}</span></div>`; } h += '</div>'; showModal(h); }
+function buildRobot(name) { const d=ROBOTS[name]; if(!d) return; if (isRobotOwned(name)) return; const needed = d.parts; if (name!=='Destrier' && (parts[name]||0) < needed) { alert('Недостаточно деталей!'); return; } if (name!=='Destrier') parts[name]-=needed; const curWeps = hangarSlots[selectedSlot].weapons ? [...hangarSlots[selectedSlot].weapons] : []; hangarSlots[selectedSlot] = { robotName:name, weapons:new Array(d.slots.length).fill(null), drone:null, mkLevel:'MK1', level:1, currentHp:null, modules:[null,null], pilot:null }; for (let i=0; i<Math.min(curWeps.length, d.slots.length); i++) { if (curWeps[i] && curWeps[i].name && WEAPONS[curWeps[i].name] && WEAPONS[curWeps[i].name].type === d.slots[i]) hangarSlots[selectedSlot].weapons[i] = curWeps[i]; } saveAccount(); hideModal(); updateHangarUI(); }
 function openWeaponSelectionModal(idx) { const s = hangarSlots[selectedSlot]; if (!s.robotName) return; const tp = ROBOTS[s.robotName].slots[idx]; let h = `<h3>Оружие #${idx+1} (${tp})</h3><button class="close-btn" onclick="hideModal()">✕</button><div onclick="unequipWeapon(${idx})" style="color:var(--danger);cursor:pointer;">🗑️ Снять</div>`; for (let [n,d] of Object.entries(WEAPONS)) { if (d.type !== tp) continue; const hv = parts[n]||0, can = hv>=1; h += `<div class="item-row ${can?'':'locked'}" onclick="${can?'equipWeapon('+idx+',\''+n+'\')':''}" style="${can?'':'opacity:0.5'}"><span>${n} (${d.dmg})</span><span>${hv}/1</span></div>`; } showModal(h); }
 function equipWeapon(idx, name) { if ((parts[name]||0)<1) return; parts[name]-=1; hangarSlots[selectedSlot].weapons[idx]={name,mkLevel:'MK1',level:1}; saveAccount(); hideModal(); updateHangarUI(); }
 function unequipWeapon(idx) { hangarSlots[selectedSlot].weapons[idx]=null; saveAccount(); hideModal(); updateHangarUI(); }
@@ -579,7 +580,7 @@ function spawnPlayerRobot() {
     fenrirMode: null, phaseShiftCharges: (r.ability === 'Phase Shift' ? (s.pilot?.name === 'Arnav Poe' ? 4 : 3) : 0), phaseShiftRechargeTimer: 0,
     precisionShotCooldown: 0,
     _heavyShotCooldown: 0, _wardSpawned: false, _isBoss: false,
-    modules: s.modules, pilot: s.pilot, pilotDarknessBonus: s.pilot?.name==='Soul Harvester'
+    modules: s.modules, pilot: s.pilot, pilotDarknessBonus: s.pilot?.name==='SoulHarvester'
   };
   lastStandUsed = false;
 }
